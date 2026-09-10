@@ -1,0 +1,23 @@
+services:
+  wled-warehouse:
+    image: node:20-alpine
+    container_name: ${CONTAINER_NAME:-wled_warehouse}
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ${APP_DIR:-/opt/wled_warehouse}:/app
+      - wled_warehouse_data:/app/data
+    working_dir: /app
+    command: sh -c "npm install && node backend/server.js"
+    networks:
+      lan:
+        ipv4_address: ${CONTAINER_IP:-192.168.200.11}
+
+networks:
+  lan:
+    external: true
+    name: ${DOCKER_NETWORK:-fleet-manager_vlan200_net}
+
+volumes:
+  wled_warehouse_data:

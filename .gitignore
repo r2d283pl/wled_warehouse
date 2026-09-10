@@ -1,0 +1,22 @@
+# Zależności (odtwarzane przez npm install)
+node_modules/
+
+# Sekrety i lokalna konfiguracja — NIE commitować (jest .env.example)
+.env
+*.local
+
+# Dane lokalne / baza SQLite (trzymana w wolumenie Dockera)
+data/
+*.db
+*.db-shm
+*.db-wal
+
+# Narzędzia / stan lokalny
+.claude/
+.DS_Store
+
+# Logi
+*.log
+npm-debug.log*
+
+# UWAGA: frontend/dist jest CELOWO wersjonowany (wdrożenie przez skopiowanie repo bez budowania)
