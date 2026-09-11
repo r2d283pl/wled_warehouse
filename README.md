@@ -35,6 +35,16 @@ cd /opt/wled_warehouse
 docker compose up -d
 ```
 
+## Wdrożenie na serwer docelowy
+
+```bash
+./deploy/make-package.sh     # buduje dist/wled-warehouse-<wersja>.tar.gz (offline)
+```
+
+Paczkę kopiuje się na serwer i rozpakowuje — `sudo ./install.sh` robi resztę
+(obraz Dockera, `.env`, sieć macvlan, import bazy, start). Szczegóły:
+[`deploy/INSTALL.md`](deploy/INSTALL.md) i [`MIGRATION.md`](MIGRATION.md).
+
 ## API Endpoints
 
 - `POST /api/auth/login` - Logowanie

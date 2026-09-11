@@ -12,8 +12,15 @@ data/
 *.db-wal
 
 # Narzędzia / stan lokalny
-.claude/
+# UWAGA: .claude/settings.json jest CELOWO wersjonowany (uprawnienia i reguły
+# izolacji sieci dla Claude Code na serwerze docelowym). Lokalny stan — nie.
+.claude/settings.local.json
+.claude/*.local.json
 .DS_Store
+
+# Paczki wdrożeniowe (budowane przez deploy/make-package.sh) i kopie zapasowe
+/dist/
+/backups/
 
 # Logi
 *.log

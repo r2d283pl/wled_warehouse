@@ -1,8 +1,92 @@
 # Migracja WLED Warehouse na inny serwer
 
-Aplikacja jest spakowana tak, by przenieść ją w kilku krokach. Cała konfiguracja
-zależna od środowiska jest w pliku **`.env`** (czytanym zarówno przez aplikację,
-jak i przez `docker-compose.yml` do podstawień zmiennych).
+Są dwie drogi. **Wariant A** (paczka offline) jest zalecany do wdrożenia
+produkcyjnego — nie wymaga internetu na serwerze docelowym. **Wariant B**
+(ręczny) przydaje się, gdy chcesz kontrolować każdy krok.
+
+Cała konfiguracja zależna od środowiska jest w pliku **`.env`** (czytanym zarówno
+przez aplikację, jak i przez `docker-compose.yml` do podstawień zmiennych).
+
+---
+
+# Wariant A — paczka offline (zalecany)
+
+## 1. Zbuduj paczkę (na maszynie deweloperskiej, z internetem)
+
+```bash
+cd /opt/wled_warehouse
+./deploy/make-package.sh              # z bieżącymi danymi z działającego kontenera
+./deploy/make-package.sh --no-data    # czysta instalacja, bez danych
+```
+
+Powstaje `dist/wled-warehouse-<wersja>.tar.gz` (~57 MB). Zawiera:
+
+- obraz Dockera z **prebudowanymi** zależnościami (`better-sqlite3`, `bcrypt`
+  skompilowane pod musl/Alpine) — serwer nie potrzebuje npm ani internetu,
+- kod aplikacji wraz z gotowym `frontend/dist`,
+- spójny zrzut bazy (robiony przez API backupu SQLite, więc bez problemu z WAL),
+- **pełną historię git jako bundle** — serwer dostaje prawdziwe repozytorium
+  z ustawionym `origin`, bez potrzeby posiadania poświadczeń w chwili instalacji,
+- **pliki dla Claude Code**: `CLAUDE.md` (architektura + zasady izolacji sieci)
+  i `.claude/settings.json` (uprawnienia, deny-lista chroniąca izolację),
+- skrypty `install.sh`, `update.sh`, `backup.sh`, `restore.sh` i `INSTALL.md`.
+
+Paczkę buduj z **zacommitowanego** stanu repozytorium — wtedy historia w bundlu
+zgadza się z plikami. `--allow-dirty` wymusza budowę mimo zmian roboczych.
+
+## 2. Skopiuj na serwer i uruchom instalator
+
+```bash
+tar -xzf wled-warehouse-<wersja>.tar.gz
+cd wled-warehouse-<wersja>
+sudo ./install.sh
+```
+
+Instalator pyta o katalog, konto admina, IP kontenera, sieć paneli i sposób
+udostępnienia UI, a następnie sam wczytuje obraz, tworzy `.env` z losowym
+`JWT_SECRET`, **tworzy sieć macvlan (także z VLAN-em na porcie trunk, opcjonalnie
+trwale przez systemd-networkd)**, odtwarza repozytorium git z bundla, importuje
+bazę i startuje aplikację, sprawdzając `/api/health`.
+
+Jeśli wolisz utworzyć sieć samodzielnie — patrz punkt 4 w Wariancie B poniżej;
+instalator wykryje istniejącą sieć i pominie kreator.
+
+## 3. Aktualizacje i kopie zapasowe
+
+```bash
+sudo ./update.sh --app-dir /opt/wled_warehouse   # z nowszej paczki; zachowuje .env i dane
+/opt/wled_warehouse/deploy/backup.sh             # kopia bazy + .env
+/opt/wled_warehouse/deploy/restore.sh <archiwum> # odtworzenie danych
+```
+
+Kod jest montowany z katalogu hosta, więc pliki backendu można edytować
+bezpośrednio na serwerze i wykonać `docker compose restart`.
+
+Pełna instrukcja dla osoby wdrażającej: **`deploy/INSTALL.md`**.
+
+## 4. Środowisko docelowe i model dostępu
+
+Panele pracują w **VLAN 8 sieci ITX, 192.168.188.0/23**. Ten VLAN **nie ma
+routingu** — powstał pod urządzenia IoT w magazynie, więc nie ma tam bramy ani
+internetu. Sieć macvlan tworzy się wtedy **bez `--gateway`** (instalator przyjmuje
+pustą bramę).
+
+Dostęp dla ludzi (sieć Rhenus, Tailscale) idzie **przez hosta**, nie przez VLAN:
+nakładka `docker-compose.access.yml` publikuje port aplikacji na hoście. Jest to
+możliwe, bo frontend używa wyłącznie ścieżek względnych `/api/...` — **cały ruch
+do paneli realizuje backend w kontenerze**, przeglądarka nigdy nie łączy się
+z panelem bezpośrednio.
+
+Dzięki temu panele pozostają odcięte: nie powstaje żadna trasa z Rhenus ani
+z tailnetu do 192.168.188.0/23. Komplet reguł (czego nie wolno zrobić) jest
+w `CLAUDE.md`, sekcja 1 — to samo czyta Claude Code na serwerze docelowym.
+
+Uwaga o skanowaniu: skaner przyjmuje prefiks /24, a podsieć paneli to /23 —
+pełne pokrycie wymaga dwóch przebiegów (`192.168.188` i `192.168.189`).
+
+---
+
+# Wariant B — migracja ręczna
 
 ## Wymagania na serwerze docelowym
 - Docker + Docker Compose v2
@@ -33,6 +117,8 @@ jak i przez `docker-compose.yml` do podstawień zmiennych).
 
    CONTAINER_NAME=wled_warehouse
    APP_DIR=/opt/wled_warehouse        # ścieżka katalogu na nowym serwerze
+   # APP_IMAGE=...                    # zostaw zakomentowane — tryb ręczny używa
+                                      # node:20-alpine i npm install przy starcie
    CONTAINER_IP=192.168.200.11        # IP kontenera w sieci paneli
    DOCKER_NETWORK=fleet-manager_vlan200_net   # nazwa istniejącej sieci docker
    ```
@@ -118,7 +204,9 @@ jak i przez `docker-compose.yml` do podstawień zmiennych).
   docker run --rm -v wled_warehouse_data:/d -v $PWD:/b alpine \
     sh -c "cd /d && tar xzf /b/wled_data.tgz"
   ```
-- Przeglądarka operatora (Android/PC) musi być w sieci osiągającej panele —
-  status i sterowanie idą częściowo bezpośrednio do paneli po IP.
+- Przeglądarka operatora (Android/PC) musi dosięgnąć **aplikację**, ale **nie
+  musi widzieć paneli** — frontend używa wyłącznie ścieżek względnych `/api/...`,
+  a ruch do paneli realizuje backend w kontenerze (`backend/routes/wled.js`,
+  `clockScheduler.js`, `scheduleRunner.js`, `discovery.js`).
 - Parametry aplikacyjne (podsieć skanowania) można też zmienić w locie w UI:
   **Ustawienia** (zmiana efektywna natychmiast, bez restartu).

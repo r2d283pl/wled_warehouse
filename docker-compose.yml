@@ -1,15 +1,21 @@
 services:
   wled-warehouse:
-    image: node:20-alpine
+    # Domyślnie goły node:20-alpine (tryb deweloperski — zależności z npm install).
+    # Wdrożenie produkcyjne ustawia w .env: APP_IMAGE=wled-warehouse:<wersja>
+    # (obraz z prebudowanymi zależnościami, start bez internetu).
+    image: ${APP_IMAGE:-node:20-alpine}
     container_name: ${CONTAINER_NAME:-wled_warehouse}
     restart: unless-stopped
+    # docker-init jako PID 1 — przekazuje SIGTERM do node, dzięki czemu
+    # `docker compose down/restart` kończy się od razu zamiast po 10 s timeoutu.
+    init: true
     env_file:
       - .env
     volumes:
       - ${APP_DIR:-/opt/wled_warehouse}:/app
       - wled_warehouse_data:/app/data
     working_dir: /app
-    command: sh -c "npm install && node backend/server.js"
+    command: sh /app/deploy/start.sh
     networks:
       lan:
         ipv4_address: ${CONTAINER_IP:-192.168.200.11}

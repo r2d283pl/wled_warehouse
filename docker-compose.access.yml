@@ -1,0 +1,23 @@
+# Nakładka: udostępnia UI aplikacji na hoście — dla sieci Rhenus i Tailscale.
+# Włącza ją wpis COMPOSE_FILE w .env (ustawia go install.sh). Patrz CLAUDE.md, sekcja 1.
+#
+# WAŻNE: to publikacja JEDNEGO portu aplikacji, a NIE trasowanie VLAN-u 8.
+# Panele LED pozostają nieosiągalne z Rhenus/Tailscale — kontener nie forwarduje
+# ruchu między swoimi interfejsami, a host nie dostaje trasy do 192.168.188.0/23.
+#
+# Koszt tego rozwiązania: dodatkowy interfejs bridge daje kontenerowi wyjście do
+# internetu przez NAT hosta. Sieci `internal: true` użyć się nie da — wtedy
+# publikacja portu przestaje działać (sprawdzone). Opcjonalne utwardzenie po
+# stronie IT: reguła w łańcuchu DOCKER-USER blokująca ruch wychodzący z podsieci
+# `access` poza host.
+services:
+  wled-warehouse:
+    networks:
+      access:
+    ports:
+      - "${HOST_BIND:-0.0.0.0}:${HOST_PORT:-3000}:${PORT:-3000}"
+
+networks:
+  access:
+    driver: bridge
+    name: ${ACCESS_NETWORK:-wled_warehouse_access}
