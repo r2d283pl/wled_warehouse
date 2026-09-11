@@ -2,8 +2,12 @@
 # Włącza ją wpis COMPOSE_FILE w .env (ustawia go install.sh). Patrz CLAUDE.md, sekcja 1.
 #
 # WAŻNE: to publikacja JEDNEGO portu aplikacji, a NIE trasowanie VLAN-u 8.
-# Panele LED pozostają nieosiągalne z Rhenus/Tailscale — kontener nie forwarduje
-# ruchu między swoimi interfejsami, a host nie dostaje trasy do 192.168.188.0/23.
+# Panele LED pozostają nieosiągalne z Rhenus/Tailscale, bo:
+#   1. sieć `access` jest lokalną siecią bridge hosta (NAT) — jej adresy nie są
+#      osiągalne z Rhenus ani z tailnetu, więc nikt nie może użyć kontenera
+#      jako następnego skoku,
+#   2. nigdzie nie powstaje trasa do 192.168.188.0/23 — ani na hoście, ani w VPN,
+#   3. forwardowanie w kontenerze jest jawnie wyłączone (sysctls niżej).
 #
 # Koszt tego rozwiązania: dodatkowy interfejs bridge daje kontenerowi wyjście do
 # internetu przez NAT hosta. Sieci `internal: true` użyć się nie da — wtedy
@@ -16,6 +20,10 @@ services:
       access:
     ports:
       - "${HOST_BIND:-0.0.0.0}:${HOST_PORT:-3000}:${PORT:-3000}"
+    # Kontener ma dwa interfejsy (VLAN paneli + bridge dostępowy), ale ma NIE być
+    # routerem między nimi. Domyślnie namespace dziedziczy ip_forward=1 z hosta.
+    sysctls:
+      net.ipv4.ip_forward: "0"
 
 networks:
   access:

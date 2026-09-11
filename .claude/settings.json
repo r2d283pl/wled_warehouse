@@ -56,6 +56,10 @@
       "Edit(./**)",
       "Write(./**)"
     ],
+    "ask": [
+      "Bash(docker network create:*)",
+      "Bash(docker run:*)"
+    ],
     "deny": [
       "Bash(ip link add:*)",
       "Bash(ip link set:*)",
@@ -82,12 +86,10 @@
       "Bash(systemctl restart systemd-networkd:*)",
       "Bash(systemctl restart networking:*)",
       "Bash(systemctl restart NetworkManager:*)",
-      "Bash(docker network create:*)",
       "Bash(docker network rm:*)",
       "Bash(docker network connect:*)",
       "Bash(docker network disconnect:*)",
       "Bash(docker network prune:*)",
-      "Bash(docker run:*)",
       "Bash(git push --force:*)",
       "Bash(git push -f:*)",
       "Bash(git reset --hard:*)",

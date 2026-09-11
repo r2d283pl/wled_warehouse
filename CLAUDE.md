@@ -31,6 +31,15 @@ panelami bezpośrednio** — musi dosięgnąć tylko aplikację.
 Wniosek: żeby dać komuś dostęp, publikujemy port aplikacji na hoście
 (`docker-compose.access.yml`). **Nigdy** nie trasujemy VLAN-u 8 do innych sieci.
 
+Izolacja przy włączonej nakładce trzyma się na trzech rzeczach — jeśli zmieniasz
+cokolwiek w sieci, sprawdź, czy nadal obowiązują wszystkie trzy:
+
+1. sieć `access` to lokalny bridge hosta (NAT) — jej adresy są nieosiągalne
+   z Rhenus i z tailnetu, więc nikt nie użyje kontenera jako następnego skoku,
+2. nigdzie nie istnieje trasa do `192.168.188.0/23` — ani na hoście, ani w VPN,
+3. kontener ma jawnie wyłączone forwardowanie (`sysctls: net.ipv4.ip_forward=0`
+   w `docker-compose.access.yml`) — namespace domyślnie dziedziczy `1` z hosta.
+
 ## Czego nie wolno zrobić
 
 - ❌ **Nie** rozgłaszaj `192.168.188.0/23` w Tailscale (`--advertise-routes`) ani
@@ -44,8 +53,12 @@ Wniosek: żeby dać komuś dostęp, publikujemy port aplikacji na hoście
 - ❌ **Nie** licz na internet w kontenerze — w VLAN 8 go nie ma. `npm install`,
   `git pull`, pobieranie obrazów wykonuje **host**, nigdy kontener przez VLAN 8.
 - ❌ **Nie** zmieniaj konfiguracji sieciowej hosta (`ip link/addr/route add`,
-  `netplan apply`, restart `systemd-networkd`, firewall) bez wyraźnej zgody
-  użytkownika w bieżącej rozmowie. Te operacje są na deny-liście w `.claude/settings.json`.
+  `netplan apply`, restart `systemd-networkd`, firewall, `tailscale up/set`).
+  Te operacje są na **deny-liście** w `.claude/settings.json` — jeśli naprawdę
+  są potrzebne, wykonuje je człowiek, świadomie i poza Claude Code.
+- ⚠️ `docker network create` i `docker run` wymagają **potwierdzenia** (lista `ask`).
+  Zanim poprosisz o zgodę, powiedz wprost, jakiej sieci dotyczy operacja i czy
+  dotyka VLAN-u paneli.
 
 ## Co wolno i jak
 
