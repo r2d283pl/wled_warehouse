@@ -1729,8 +1729,20 @@ function DevicesView({ devices, areas = [], fetchData, onOpenWled }) {
   const [netScanning, setNetScanning] = useState(false);
   const [netResults, setNetResults] = useState(null);
   const [adding, setAdding] = useState({});
+  const [liveStatus, setLiveStatus] = useState({});
 
   const showToast = (type, msg) => { setToast({ type, msg }); setTimeout(() => setToast(null), 3000); };
+
+  // Żywy status paneli (online/offline) — przez backend, co 5 s
+  useEffect(() => {
+    let active = true;
+    const check = async () => {
+      try { const data = await API.getDeviceStatuses(); if (active && data && !data.error) setLiveStatus(data); } catch { /* pomiń */ }
+    };
+    check();
+    const iv = setInterval(check, 5000);
+    return () => { active = false; clearInterval(iv); };
+  }, [devices.length]);
 
   const handleNetworkScan = async () => {
     setNetScanning(true);
@@ -1930,9 +1942,14 @@ function DevicesView({ devices, areas = [], fetchData, onOpenWled }) {
                     <span className="font-mono">{d.ip}</span>
                     <span>{d.size}</span>
                     {d.location && <span>📍 {d.location}</span>}
-                    <span className={d.last_seen ? 'text-emerald-400' : 'text-red-400'}>
-                      {d.last_seen ? 'Online' : 'Offline'}
-                    </span>
+                    {liveStatus[d.id] ? (
+                      <span className={liveStatus[d.id].online ? 'text-emerald-400' : 'text-red-400'}
+                        title={d.last_seen ? `Ostatni skan: ${d.last_seen}` : undefined}>
+                        {liveStatus[d.id].online ? 'Online' : 'Offline'}
+                      </span>
+                    ) : (
+                      <span className="text-slate-500">sprawdzam…</span>
+                    )}
                     <span className="flex items-center gap-1 text-slate-500">
                       <Layers size={11} />
                       <select value={d.area_id || ''} onChange={e => handleAssignArea(d.id, e.target.value)}
@@ -3437,7 +3454,7 @@ function SettingsView() {
 // ADMIN: GRAFIKA (edytor pikselowy + animacja)
 // ==========================================
 const PAL = ['#000000','#ffffff','#ff0000','#00ff00','#0000ff','#ffff00','#00ffff','#ff00ff','#ff8000','#8000ff','#ff0080','#0080ff','#80ff00','#808080','#00ff80','#ff4040'];
-const SIZE_PRESETS = [[16,16],[16,32],[32,16],[8,32],[32,32],[8,8]];
+const SIZE_PRESETS = [[16,16],[16,32],[32,16],[8,32],[32,8],[32,32],[8,8]];
 const blankFrame = (w, h) => Array(w * h).fill('#000000');
 
 // Biblioteka ikon — rysowane wektorowo, skalują się do dowolnego rozmiaru matrycy
