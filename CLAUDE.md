@@ -228,6 +228,44 @@ Aktualizacja serwera z nowej paczki: `sudo ./update.sh --app-dir /opt/wled_wareh
 - Wywołania do paneli zawsze z timeoutem (`AbortSignal.timeout(3000)`) — panel
   bywa offline i nie może blokować requestu.
 
+## Pułapki znane z dotychczasowej pracy
+
+**Frontend / API**
+- `API.request` w `App.jsx` **nie rzuca wyjątku** przy 4xx/5xx — zwraca JSON z błędem.
+  Każdy handler zapisu musi sprawdzać `res?.error` i pokazać go w UI; inaczej
+  odrzucona walidacja (np. duplikat IP, hasło < 6 znaków) wygląda jak sukces.
+- `routes/devices.js` i `routes/wled.js` są montowane **pod tym samym** `/api/devices`
+  (devices pierwszy). Nie dodawaj w `devices.js` ogólnego `router.use(requireAdmin)` —
+  zablokuje operatorom przejście do `wled.js`. `requireAdmin` zakładaj per trasa.
+- Przeglądarka nigdy nie pyta paneli bezpośrednio — status idzie przez backend
+  (`GET /api/devices/status`, `/:id/state`, `/:id/wledmeta`).
+- Stan bazowy panelu (co ma wyświetlać „normalnie”) jest w tabeli `panel_base`
+  (backend), a nie w localStorage — wspólny dla wszystkich przeglądarek.
+
+**Panele WLED**
+- **Nie zasypuj jednego panelu szybkimi POST-ami** (także w testach) — serwer HTTP
+  WLED się zawiesza (panel dalej odpowiada na ping, API nie) i trzeba go zrestartować.
+  Animacje mają dolny limit 120 ms/klatkę (`patternAnimator.js`).
+- Tekst/zegar wymaga: efektu „Scrolling Text” (indeks z `/json/eff`, fallback 122),
+  palety „Color 1” (z `/json/pal`) i **`frz:false`** w segmencie — inaczej po grafice
+  panel zostaje zamrożony/ciemny.
+- Tekst/zegar działa tylko, gdy panel ma w WLED ustawioną **konfigurację 2D**
+  (`info.leds.matrix` nie jest `undefined`). W trybie 1D zobaczysz jednolity kolor.
+- Czcionka WLED jest ASCII — polskie znaki są transliterowane (`asciiText()`).
+- Grafiki wysyłane są przez `seg[].i` z `frz:true`; mapowanie pikseli standardowe
+  (wierszami, od lewego górnego rogu).
+- Zegar wysyła backend (`clockScheduler.js`) wg czasu serwera — zależy od `TZ`.
+
+**Dane**
+- W bazie jest grafika **„rhenus logo”** (32x16) — nie usuwaj.
+- Natywne moduły (`better-sqlite3`, `bcrypt`) są skompilowane pod Alpine/musl —
+  backendu **nie uruchamiaj na hoście** (`node backend/server.js`), tylko w kontenerze.
+
+## Otwarte zadania (hardening)
+- CORS domyślnie odbija origin — ustawić `CORS_ORIGINS` na produkcji.
+- `frontend/src/App.jsx` to jeden bardzo duży plik — do podziału.
+- Interfejs dotykowy (tablety 7–10") — dalsze dopracowanie.
+
 ---
 
 # 7. Zanim uznasz zadanie za zrobione
