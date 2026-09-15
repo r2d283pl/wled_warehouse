@@ -603,6 +603,13 @@ function DashboardView({ user, areas, fetchData, onOpenWled }) {
     return [...map.values()];
   }, [areas]);
   const [activeDashId, setActiveDashId] = useState(null);
+  // Szerokość ekranu — na telefonie siatka strefy nie może mieć tylu kolumn co na monitorze
+  const [viewportW, setViewportW] = useState(() => window.innerWidth);
+  useEffect(() => {
+    const onResize = () => setViewportW(window.innerWidth);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
   const [deviceStatus, setDeviceStatus] = useState({});
   const [textInputs, setTextInputs] = useState({});
   const [textColors, setTextColors] = useState({});
@@ -1119,6 +1126,11 @@ function DashboardView({ user, areas, fetchData, onOpenWled }) {
 
   const getDeviceName = (id) => devices.find(d => d.id === id)?.name || `ID:${id}`;
   const getDeviceIp = (id) => devices.find(d => d.id === id)?.ip;
+  // Efektywna liczba kolumn: ustawienie strefy, ale karta panelu musi mieć min. ~300 px
+  // (od md boczne menu zajmuje 256 px, do tego marginesy widoku)
+  const areaCols = activeDash?.grid_cols || 4;
+  const availW = viewportW >= 768 ? viewportW - 256 - 64 : viewportW - 32;
+  const gridCols = Math.max(1, Math.min(areaCols, Math.floor((availW + 16) / 316)));
 
   return (
     <div className="p-4 md:p-8">
@@ -1138,7 +1150,7 @@ function DashboardView({ user, areas, fetchData, onOpenWled }) {
       {activeDash && (
         <>
           <div className="flex items-center justify-between mb-8 gap-4 flex-wrap">
-            <h1 className="text-3xl font-bold text-white">{activeDash.name}</h1>
+            <h1 className="text-2xl md:text-3xl font-bold text-white">{activeDash.name}</h1>
             <div className="flex items-center gap-2">
               {adminLocked ? (
                 <span className="text-xs text-amber-400 flex items-center gap-1 bg-amber-900/20 px-3 py-1.5 rounded-lg border border-amber-500/20">
@@ -1169,13 +1181,15 @@ function DashboardView({ user, areas, fetchData, onOpenWled }) {
               <input type="text" placeholder="Tekst na wszystkie panele..." value={bcText}
                 onChange={e => setBcText(e.target.value)}
                 className="flex-1 min-w-[160px] bg-slate-900 border border-slate-600 rounded-lg p-2 text-white text-sm focus:border-blue-500 outline-none" />
-              <div className="flex items-center gap-1.5 flex-shrink-0">
-                <span className="text-[10px] uppercase tracking-wider text-slate-400">Prędkość</span>
-                <input type="range" min="0" max="255" value={bcSpeed} onChange={e => setBcSpeed(parseInt(e.target.value))} className="w-24 accent-emerald-500" />
+              <div className="flex items-center gap-1.5 w-full sm:w-auto">
+                <span className="text-[10px] uppercase tracking-wider text-slate-400 flex-shrink-0">Prędkość</span>
+                <input type="range" min="0" max="255" value={bcSpeed} onChange={e => setBcSpeed(parseInt(e.target.value))} className="flex-1 sm:flex-none sm:w-24 accent-emerald-500" />
               </div>
-              <button onClick={broadcastText} className="bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm px-3 py-2 rounded-lg flex items-center gap-1.5 flex-shrink-0"><Type size={15} /> Wyślij tekst</button>
-              <button onClick={broadcastClock} className="bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm px-3 py-2 rounded-lg flex items-center gap-1.5 flex-shrink-0"><Clock size={15} /> Wyślij zegar</button>
-              <button onClick={broadcastOff} title="Wyłącz tekst/zegar na całej strefie i przywróć panele" className="bg-slate-700 hover:bg-red-600 text-slate-200 hover:text-white font-bold text-sm px-3 py-2 rounded-lg flex items-center gap-1.5 flex-shrink-0"><Power size={15} /> Wyłącz</button>
+              <div className="flex gap-2 w-full sm:w-auto">
+                <button onClick={broadcastText} className="flex-1 sm:flex-none bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm px-3 py-2 rounded-lg flex items-center justify-center gap-1.5 whitespace-nowrap"><Type size={15} /> <span className="sm:hidden">Tekst</span><span className="hidden sm:inline">Wyślij tekst</span></button>
+                <button onClick={broadcastClock} className="flex-1 sm:flex-none bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm px-3 py-2 rounded-lg flex items-center justify-center gap-1.5 whitespace-nowrap"><Clock size={15} /> <span className="sm:hidden">Zegar</span><span className="hidden sm:inline">Wyślij zegar</span></button>
+                <button onClick={broadcastOff} title="Wyłącz tekst/zegar na całej strefie i przywróć panele" className="flex-1 sm:flex-none bg-slate-700 hover:bg-red-600 text-slate-200 hover:text-white font-bold text-sm px-3 py-2 rounded-lg flex items-center justify-center gap-1.5 whitespace-nowrap"><Power size={15} /> Wyłącz</button>
+              </div>
               <span className="w-full text-[10px] text-slate-500">Kolor tekstu/zegara = aktualny kolor każdego panelu (np. zielony „dostępne", czerwony „niedostępne").</span>
             </div>
           )}
@@ -1186,9 +1200,9 @@ function DashboardView({ user, areas, fetchData, onOpenWled }) {
                 Tryb edycji: przeciągnij kartę panelu (mysz) lub użyj strzałek (dotyk), aby zmienić kolejność paneli. Kliknij „Gotowe", gdy skończysz.
               </p>
               <div className="grid gap-4 items-start"
-                style={{ gridTemplateColumns: `repeat(${activeDash.grid_cols || 4}, minmax(0, 1fr))` }}>
+                style={{ gridTemplateColumns: `repeat(${gridCols}, minmax(0, 1fr))` }}>
                 {orderedDevIds.map(devId => {
-                  const cols = activeDash.grid_cols || 4;
+                  const cols = gridCols;
                   const dev = devices.find(d => d.id === devId);
                   const fnCount = (activeDash.tiles || []).filter(t => (t.targetIds || []).length === 1 && t.targetIds[0] === devId).length;
                   return (
@@ -1221,7 +1235,7 @@ function DashboardView({ user, areas, fetchData, onOpenWled }) {
             // Render pojedynczej funkcji (dotychczasowy kafelek) — reużywany wewnątrz karty panelu.
             const renderStandaloneTile = (tile) => {
               const targetIds = tile.targetIds || [];
-              const w = tile.width || 1;
+              const w = Math.min(tile.width || 1, gridCols);
               const h = tile.height || 1;
               const status = targetIds.length > 0 ? deviceStatus[targetIds[0]] : null;
 
@@ -1591,8 +1605,10 @@ function DashboardView({ user, areas, fetchData, onOpenWled }) {
                     <div className="w-full px-3 py-2 flex items-center gap-2">
                       <button onClick={toggleExp} className="flex-1 min-w-0 flex items-center gap-2 text-left" title="Ustaw treść">
                         <span className={`${chip} ${active ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-300'}`}><Type size={14} /></span>
-                        <span className={titleCls}>{tile.title || 'Tekst'}</span>
-                        {active && <span className="text-[9px] font-bold text-emerald-300 uppercase flex-shrink-0">● na panelu</span>}
+                        <span className="flex-1 min-w-0 flex flex-col">
+                          <span className="truncate text-xs font-bold text-slate-200">{tile.title || 'Tekst'}</span>
+                          {active && <span className="text-[9px] font-bold text-emerald-300 uppercase leading-tight">● na panelu</span>}
+                        </span>
                         <ChevronDown size={14} className={`text-slate-400 flex-shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
                       </button>
                       {onOffSwitch(active, toggle)}
@@ -1630,9 +1646,15 @@ function DashboardView({ user, areas, fetchData, onOpenWled }) {
                 return (
                   <div key={key} className={`rounded-xl border px-3 py-2 flex items-center gap-2 ${active ? 'border-emerald-500/60 bg-emerald-950/20' : 'border-slate-700 bg-slate-900/50'}`}>
                     <span className={`${chip} ${active ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-300'}`}><Clock size={14} /></span>
-                    <span className={titleCls}>{tile.title || 'Zegar'}</span>
-                    {active && <span className="text-[9px] font-bold text-emerald-300 uppercase flex-shrink-0">● na panelu</span>}
-                    {cfg.autoPush && <span className="text-[9px] font-bold text-emerald-400 flex items-center gap-0.5 flex-shrink-0"><RefreshCw size={9} />AUTO</span>}
+                    <span className="flex-1 min-w-0 flex flex-col">
+                      <span className="truncate text-xs font-bold text-slate-200">{tile.title || 'Zegar'}</span>
+                      {(active || cfg.autoPush) && (
+                        <span className="flex flex-wrap items-center gap-x-1.5 text-[9px] font-bold uppercase leading-tight">
+                          {active && <span className="text-emerald-300">● na panelu</span>}
+                          {cfg.autoPush && <span className="text-emerald-400 flex items-center gap-0.5"><RefreshCw size={9} />AUTO</span>}
+                        </span>
+                      )}
+                    </span>
                     <span className="font-mono text-sm font-bold tabular-nums flex-shrink-0" style={{ color: cfg.color || '#fff' }}>{timeStr}</span>
                     {onOffSwitch(active, toggle)}
                   </div>
@@ -1686,7 +1708,7 @@ function DashboardView({ user, areas, fetchData, onOpenWled }) {
 
             // Podział: kafelki jednourządzeniowe → grupy per panel; wielourządzeniowe → osobno (jak dotąd).
             // Kolejność paneli pochodzi z orderedDevIds (Etap 4 — wspólna dla widoku i trybu edycji układu).
-            const cols = activeDash.grid_cols || 4;
+            const cols = gridCols;
             const singleByDevice = new Map();
             const multiTiles = [];
             for (const t of renderTiles) {
